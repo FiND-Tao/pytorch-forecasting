@@ -24,7 +24,7 @@ from pytorch_forecasting.models.temporal_fusion_transformer.sub_modules import (
     VariableSelectionNetwork,
 )
 from pytorch_forecasting.utils import create_mask, detach, integer_histogram, masked_op, padded_stack, to_list
-
+import timm
 
 class TemporalFusionTransformer(BaseModelWithCovariates):
     def __init__(
@@ -59,6 +59,8 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
         share_single_variable_networks: bool = False,
         causal_attention: bool = True,
         logging_metrics: nn.ModuleList = None,
+        images: List[str] = [],
+        img_dict={},
         **kwargs,
     ):
         """
@@ -141,7 +143,9 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
         # store loss function separately as it is a module
         assert isinstance(loss, LightningMetric), "Loss has to be a PyTorch Lightning `Metric`"
         super().__init__(loss=loss, logging_metrics=logging_metrics, **kwargs)
-
+        self.images=images
+        self.img_dict=img_dict
+        self.img_output_size=500
         # processing inputs
         # embeddings
         self.input_embeddings = MultiEmbedding(
@@ -152,13 +156,14 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
             max_embedding_size=self.hparams.hidden_size,
         )
 
-        # continuous variable processing
+        # continuous variable processing. convert real value variable from 128x6x1 to 128x6x8
         self.prescalers = nn.ModuleDict(
             {
                 name: nn.Linear(1, self.hparams.hidden_continuous_sizes.get(name, self.hparams.hidden_continuous_size))
                 for name in self.reals
             }
         )
+   
 
         # variable selection
         # variable selection for static variables
@@ -172,11 +177,13 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
             }
         )
         self.static_variable_selection = VariableSelectionNetwork(
+            images=self.images,
             input_sizes=static_input_sizes,
             hidden_size=self.hparams.hidden_size,
             input_embedding_flags={name: True for name in self.hparams.static_categoricals},
             dropout=self.hparams.dropout,
             prescalers=self.prescalers,
+            img_dict=self.img_dict
         )
 
         # variable selection for encoder and decoder
@@ -189,7 +196,15 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
                 for name in self.hparams.time_varying_reals_encoder
             }
         )
-
+        
+        images_sub=[name for name in self.images if name in self.hparams.time_varying_reals_encoder]
+        encoder_input_sizes.update(
+            {
+                name: self.hparams.hidden_continuous_sizes.get(name, self.img_output_size)
+                for name in images_sub
+            }
+        )
+        
         decoder_input_sizes = {
             name: self.input_embeddings.output_size[name] for name in self.hparams.time_varying_categoricals_decoder
         }
@@ -220,6 +235,7 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
                     )
 
         self.encoder_variable_selection = VariableSelectionNetwork(
+            images=self.images,
             input_sizes=encoder_input_sizes,
             hidden_size=self.hparams.hidden_size,
             input_embedding_flags={name: True for name in self.hparams.time_varying_categoricals_encoder},
@@ -229,9 +245,11 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
             single_variable_grns={}
             if not self.hparams.share_single_variable_networks
             else self.shared_single_variable_grns,
+            img_dict=self.img_dict,
         )
 
         self.decoder_variable_selection = VariableSelectionNetwork(
+            images=self.images,
             input_sizes=decoder_input_sizes,
             hidden_size=self.hparams.hidden_size,
             input_embedding_flags={name: True for name in self.hparams.time_varying_categoricals_decoder},
@@ -241,6 +259,7 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
             single_variable_grns={}
             if not self.hparams.share_single_variable_networks
             else self.shared_single_variable_grns,
+            img_dict=self.img_dict,
         )
 
         # static encoders

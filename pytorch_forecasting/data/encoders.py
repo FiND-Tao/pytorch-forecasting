@@ -254,9 +254,7 @@ class NaNLabelEncoder(InitialParameterRepresenterMixIn, BaseEstimator, Transform
         Returns:
             bool: True if series is numeric
         """
-        return y.dtype.kind in "bcif" or (
-            isinstance(y.dtype, pd.CategoricalDtype) and y.cat.categories.dtype.kind in "bcif"
-        )
+        return y.dtype.kind in "bcif" or (isinstance(y, pd.CategoricalDtype) and y.cat.categories.dtype.kind in "bcif")
 
     def fit(self, y: pd.Series, overwrite: bool = False):
         """
@@ -501,9 +499,11 @@ class TorchNormalizer(InitialParameterRepresenterMixIn, BaseEstimator, Transform
 
         elif self.method == "robust":
             if isinstance(y_center, torch.Tensor):
-                self.center_ = y_center.quantile(self.method_kwargs.get("center", 0.5), dim=-1)
-                q_75 = y_scale.quantile(self.method_kwargs.get("upper", 0.75), dim=-1)
-                q_25 = y_scale.quantile(self.method_kwargs.get("lower", 0.25), dim=-1)
+                self.center_ = y_center.kthvalue(
+                    int(len(y_center) * self.method_kwargs.get("center", 0.5)), dim=-1
+                ).values
+                q_75 = y_scale.kthvalue(int(len(y_scale) * self.method_kwargs.get("upper", 0.75)), dim=-1).values
+                q_25 = y_scale.kthvalue(int(len(y_scale) * self.method_kwargs.get("lower", 0.25)), dim=-1).values
             elif isinstance(y_center, np.ndarray):
                 self.center_ = np.percentile(y_center, self.method_kwargs.get("center", 0.5) * 100, axis=-1)
                 q_75 = np.percentile(y_scale, self.method_kwargs.get("upper", 0.75) * 100, axis=-1)

@@ -202,6 +202,8 @@ class TimeSeriesDataSet(Dataset):
         scalers: Dict[str, Union[StandardScaler, RobustScaler, TorchNormalizer, EncoderNormalizer]] = {},
         randomize_length: Union[None, Tuple[float, float], bool] = False,
         predict_mode: bool = False,
+        images: List[str] = [],
+        img_dict={},
     ):
         """
         Timeseries dataset holding data for models.
@@ -359,7 +361,8 @@ class TimeSeriesDataSet(Dataset):
         self.time_varying_unknown_categoricals = [] + time_varying_unknown_categoricals
         self.time_varying_unknown_reals = [] + time_varying_unknown_reals
         self.add_relative_time_idx = add_relative_time_idx
-
+        self.images=images
+        self.img_dict=img_dict,
         # set automatic defaults
         if isinstance(randomize_length, bool):
             if not randomize_length:
