@@ -7,8 +7,9 @@ from typing import Dict, List, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
+import timm
+import cv2
+import numpy as np
 class TimeDistributed(nn.Module):
     def __init__(self, module: nn.Module, batch_first: bool = False):
         super().__init__()
@@ -256,6 +257,9 @@ class VariableSelectionNetwork(nn.Module):
         context_size: int = None,
         single_variable_grns: Dict[str, GatedResidualNetwork] = {},
         prescalers: Dict[str, nn.Linear] = {},
+        img_dict={},
+        images=[],
+        
     ):
         """
         Calcualte weights for ``num_inputs`` variables  which are each of size ``input_size``
@@ -267,7 +271,12 @@ class VariableSelectionNetwork(nn.Module):
         self.input_embedding_flags = input_embedding_flags
         self.dropout = dropout
         self.context_size = context_size
-
+        self.img_extractors=nn.ModuleDict(
+            {
+                name: timm.create_model('resnet34', pretrained=True,num_classes=500)
+                for name in images
+            }
+        )
         if self.num_inputs > 1:
             if self.context_size is not None:
                 self.flattened_grn = GatedResidualNetwork(
@@ -289,6 +298,7 @@ class VariableSelectionNetwork(nn.Module):
 
         self.single_variable_grns = nn.ModuleDict()
         self.prescalers = nn.ModuleDict()
+        self.img_dict=img_dict
         for name, input_size in self.input_sizes.items():
             if name in single_variable_grns:
                 self.single_variable_grns[name] = single_variable_grns[name]
@@ -305,6 +315,7 @@ class VariableSelectionNetwork(nn.Module):
                 self.prescalers[name] = prescalers[name]
             elif not self.input_embedding_flags.get(name, False):
                 self.prescalers[name] = nn.Linear(1, input_size)
+
 
         self.softmax = nn.Softmax(dim=-1)
 
@@ -324,8 +335,25 @@ class VariableSelectionNetwork(nn.Module):
             for name in self.input_sizes.keys():
                 # select embedding belonging to a single input
                 variable_embedding = x[name]
-                if name in self.prescalers:
+                if name in self.prescalers and not(name in self.img_extractors):
                     variable_embedding = self.prescalers[name](variable_embedding)
+                if name in self.img_extractors:
+                    "todo"
+                    img_tensor=variable_embedding
+                    batch,time_steps,imgN=img_tensor.shape
+                    output=torch.zeros([batch,time_steps,500])
+                    for i in range(batch):
+                        for j in range(time_steps):
+                            img_id=img_tensor[i,j,0]
+                            image=cv2.imread(self.img_dict[img_id.item()])
+                            image=torch.as_tensor(image.astype(np.float32)).transpose(2,0)[None]
+                            #image=image.to(device)
+                            #b=feature_output[0].transpose(0,2).sum(-1).detach().numpy()
+                            model=self.img_extractors[name]
+                            final_layer=torch.squeeze(model(image))
+                            output[i,j,:]=final_layer
+                    variable_embedding=output
+                    
                 weight_inputs.append(variable_embedding)
                 var_outputs.append(self.single_variable_grns[name](variable_embedding))
             var_outputs = torch.stack(var_outputs, dim=-1)
