@@ -24,7 +24,7 @@ from pytorch_forecasting.models.temporal_fusion_transformer.sub_modules import (
     VariableSelectionNetwork,
 )
 from pytorch_forecasting.utils import create_mask, detach, integer_histogram, masked_op, padded_stack, to_list
-import timm
+
 
 class TemporalFusionTransformer(BaseModelWithCovariates):
     def __init__(
@@ -156,14 +156,13 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
             max_embedding_size=self.hparams.hidden_size,
         )
 
-        # continuous variable processing. convert real value variable from 128x6x1 to 128x6x8
+        # continuous variable processing
         self.prescalers = nn.ModuleDict(
             {
                 name: nn.Linear(1, self.hparams.hidden_continuous_sizes.get(name, self.hparams.hidden_continuous_size))
                 for name in self.reals
             }
         )
-   
 
         # variable selection
         # variable selection for static variables
@@ -183,7 +182,7 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
             input_embedding_flags={name: True for name in self.hparams.static_categoricals},
             dropout=self.hparams.dropout,
             prescalers=self.prescalers,
-            img_dict=self.img_dict
+            img_dict=self.img_dict,
         )
 
         # variable selection for encoder and decoder
@@ -196,15 +195,14 @@ class TemporalFusionTransformer(BaseModelWithCovariates):
                 for name in self.hparams.time_varying_reals_encoder
             }
         )
-        
-        images_sub=[name for name in self.images if name in self.hparams.time_varying_reals_encoder]
-        encoder_input_sizes.update(
-            {
-                name: self.hparams.hidden_continuous_sizes.get(name, self.img_output_size)
-                for name in images_sub
-            }
-        )
-        
+        if len(self.images)>0:
+            images_sub=[name for name in self.images if name in self.hparams.time_varying_reals_encoder]
+            encoder_input_sizes.update(
+                {
+                    name: self.hparams.hidden_continuous_sizes.get(name, self.img_output_size)
+                    for name in images_sub
+                }
+            )
         decoder_input_sizes = {
             name: self.input_embeddings.output_size[name] for name in self.hparams.time_varying_categoricals_decoder
         }

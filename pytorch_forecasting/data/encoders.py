@@ -785,7 +785,7 @@ class GroupNormalizer(TorchNormalizer):
             self
         """
         y = self.preprocess(y)
-        eps = np.finfo(np.float).eps
+        eps = np.finfo(np.float64).eps
         if len(self.groups) == 0:
             assert not self.scale_by_group, "No groups are defined, i.e. `scale_by_group=[]`"
             if self.method == "standard":

@@ -12,9 +12,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.lib.function_base import iterable
 import pandas as pd
-from pytorch_lightning import LightningModule
+#from pytorch_lightning import LightningModule
 from pytorch_lightning.trainer.states import RunningStage
-from pytorch_lightning.utilities.parsing import AttributeDict, get_init_args
+from lightning import LightningModule
+from pytorch_lightning.trainer.states import RunningStage
+#from pytorch_lightning.utilities.parsing import AttributeDict, get_init_args
+from lightning.pytorch.utilities.parsing import AttributeDict, get_init_args
 import scipy.stats
 import torch
 import torch.nn as nn
@@ -411,8 +414,8 @@ class BaseModel(InitialParameterRepresenterMixIn, LightningModule, TupleOutputMi
         log, out = self.step(x, y, batch_idx)
         return log
 
-    def training_epoch_end(self, outputs):
-        self.epoch_end(outputs)
+    def on_training_epoch_end(self):
+        self.outputs
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -420,8 +423,8 @@ class BaseModel(InitialParameterRepresenterMixIn, LightningModule, TupleOutputMi
         log.update(self.create_log(x, y, out, batch_idx))
         return log
 
-    def validation_epoch_end(self, outputs):
-        self.epoch_end(outputs)
+    # def on_validation_epoch_end(self):
+        # self.outputs
 
     def test_step(self, batch, batch_idx):
         x, y = batch
@@ -429,8 +432,8 @@ class BaseModel(InitialParameterRepresenterMixIn, LightningModule, TupleOutputMi
         log.update(self.create_log(x, y, out, batch_idx))
         return log
 
-    def test_epoch_end(self, outputs):
-        self.epoch_end(outputs)
+    # def on_test_epoch_end(self, outputs):
+        # self.epoch_end(outputs)
 
     def create_log(
         self,
